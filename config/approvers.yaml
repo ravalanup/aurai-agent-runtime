@@ -1,0 +1,5 @@
+# Who may approve actions for each team: Keycloak groups (as they appear in the token's `groups` claim). Reviewed like
+# code; a change needs the owner of the team's data. Nobody can approve a request they or their agent made.
+teams:
+  ops-insights: [approvers-ops]
+  finance-reporting: [approvers-finance]

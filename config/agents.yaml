@@ -1,0 +1,17 @@
+# The agents this runtime serves. Each agent runs as its own Keycloak service account, one per use case, so connector
+# policy sees the use case's team and the audit trail names the use case. Secrets are read from the named
+# environment variables (mounted from a Secret by the chart), never stored here. Fictional.
+agents:
+  ops-insights:
+    framework: langgraph
+    team_id: ops-insights            # a gateway team and a connector-policy team (aurai-gateway, aurai-mcp-connectors)
+    use_case_id: ops-insights        # registered in aurai-eval-governance
+    risk_tier: T2
+    client_id: agent-ops-insights
+    client_secret_env: AURAI_AGENT_OPS_INSIGHTS_CLIENT_SECRET
+    gateway_key_env: AURAI_AGENT_OPS_INSIGHTS_GATEWAY_KEY
+    model: aurai-balanced
+    connectors:
+      tickets: http://connector-tickets.aurai-connectors.svc.cluster.local:8080/mcp
+      ops-data: http://connector-ops-data.aurai-connectors.svc.cluster.local:8080/mcp
+      messaging: http://connector-messaging.aurai-connectors.svc.cluster.local:8080/mcp
