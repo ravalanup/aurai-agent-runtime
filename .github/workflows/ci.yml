@@ -17,7 +17,7 @@ jobs:
     env:
       AURAI_TEST_POSTGRES_URL: postgresql://postgres:ci@localhost:5432/aurai_agents_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - uses: open-policy-agent/setup-opa@v2
@@ -36,7 +36,7 @@ jobs:
   image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t aurai-agent-runtime:ci .
       - name: The image passes its own configuration check
         run: docker run --rm -e AURAI_APPROVAL_SIGNING_KEY=ci-only-signing-key-0123456789abcdef aurai-agent-runtime:ci check
