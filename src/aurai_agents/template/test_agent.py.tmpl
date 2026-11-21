@@ -1,0 +1,83 @@
+"""Tests for the {{NAME}} agent. They run the real graph with a scripted model and connectors that enforce the real
+approval protocol, so the approval pause, a rejection and a duplicate resume are all exercised."""
+
+import pytest
+from langgraph.checkpoint.memory import InMemorySaver
+from opentelemetry.sdk.trace import TracerProvider
+
+from aurai_agents.agents.{{MODULE}} import initial_state, parse_model_output
+from aurai_agents.approval_service import ApprovalService
+from aurai_agents.approval_store import MemoryApprovalStore
+from aurai_agents.config import AgentConfig
+from aurai_agents.kit import AgentContext
+from aurai_agents.runtime import Runtime
+from aurai_agents.testing import LocalApprovals, ScriptedConnectors, ScriptedModel
+from aurai_agents.verify import Principal
+
+KEY = "template-test-signing-key-0123456789abcdef"
+CONFIG = AgentConfig(
+    name="{{NAME}}", framework="langgraph", team_id="{{TEAM}}", use_case_id="{{USE_CASE}}", risk_tier="{{TIER}}",
+    client_id="agent-{{NAME}}", client_secret_env="X", gateway_key_env="Y", model="aurai-balanced",
+    connectors={"tickets": "http://tickets"},
+)
+AGENT_IDENTITY = Principal("svc-{{NAME}}", frozenset(), "{{TEAM}}", "{{USE_CASE}}")
+APPROVER = Principal("alice", frozenset({"approvers"}))
+TICKET = {"id": "TCK-1001", "title": "Gate sensor offline", "status": "open", "body": "Fixed by the night crew."}
+
+
+def make(reply):
+    service = ApprovalService(MemoryApprovalStore(), KEY, {"{{TEAM}}": ["approvers"]})
+    connectors = ScriptedConnectors(
+        KEY, {"tickets_get": TICKET, "tickets_update_status": lambda a: {**TICKET, "status": a["status"]}},
+        needs_approval={"tickets_update_status": 1},
+    )
+    ctx = AgentContext(CONFIG, connectors, LocalApprovals(service, AGENT_IDENTITY), ScriptedModel(reply),
+                       TracerProvider().get_tracer("test"))
+    return Runtime({"{{NAME}}": ctx}, InMemorySaver()), service, connectors
+
+
+@pytest.fixture(autouse=True)
+def registered(monkeypatch):
+    from aurai_agents import runtime
+    from aurai_agents.agents import {{MODULE}}
+
+    monkeypatch.setitem(runtime.BUILDERS, "{{NAME}}", {{MODULE}}.build)
+    monkeypatch.setitem(runtime.INITIAL_STATE, "{{NAME}}", {{MODULE}}.initial_state)
+
+
+def test_input_must_name_a_ticket():
+    assert initial_state({"ticket_id": "TCK-1001"}) == {"ticket_id": "TCK-1001"}
+    for bad in ({}, {"ticket_id": "../etc/passwd"}, {"ticket_id": 7}):
+        with pytest.raises(ValueError):
+            initial_state(bad)
+
+
+def test_the_model_can_only_propose_the_statuses_the_agent_allows():
+    _, proposals, dropped = parse_model_output('{"summary": "s", "next_status": "deleted"}', "TCK-1001")
+    assert proposals == [] and dropped == 1
+    _, proposals, _ = parse_model_output('noise {"summary": "s", "next_status": "resolved"} noise', "TCK-1001")
+    assert proposals[0]["arguments"] == {"ticket_id": "TCK-1001", "status": "resolved"}
+
+
+def test_an_action_waits_for_approval_then_runs_once_it_is_given():
+    runtime, service, connectors = make({"summary": "Done.", "next_status": "resolved"})
+    view = runtime.start("{{NAME}}", {"ticket_id": "TCK-1001"}, "erin")
+    assert view["status"] == "waiting_approval" and connectors.executed == [("tickets_get", {"ticket_id": "TCK-1001"})]
+    service.decide(APPROVER, view["approvals"][0]["id"], "approve")
+    done = runtime.resume("{{NAME}}", view["run_id"], "erin")
+    assert done["status"] == "completed"
+    assert connectors.executed[-1] == ("tickets_update_status", {"ticket_id": "TCK-1001", "status": "resolved"})
+
+
+def test_a_rejected_action_never_runs():
+    runtime, service, connectors = make({"summary": "Done.", "next_status": "resolved"})
+    view = runtime.start("{{NAME}}", {"ticket_id": "TCK-1001"}, "erin")
+    service.decide(APPROVER, view["approvals"][0]["id"], "reject")
+    done = runtime.resume("{{NAME}}", view["run_id"], "erin")
+    assert [a["outcome"] for a in done["result"]["actions"]] == ["rejected"]
+    assert all(tool != "tickets_update_status" for tool, _ in connectors.executed)
+
+
+def test_keeping_the_ticket_as_it_is_needs_no_approval():
+    runtime, _, _ = make({"summary": "Nothing to do.", "next_status": "keep"})
+    assert runtime.start("{{NAME}}", {"ticket_id": "TCK-1001"}, "erin")["status"] == "completed"

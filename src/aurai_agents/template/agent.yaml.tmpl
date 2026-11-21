@@ -1,0 +1,13 @@
+# Add this under `agents:` in config/agents.yaml, and the team under `teams:` in config/approvers.yaml
+# (`{{TEAM}}: [<keycloak approver group>]`). Then run `aurai-agents keycloak-plan` to see the client it needs.
+  {{NAME}}:
+    framework: langgraph
+    team_id: {{TEAM}}                 # must be a gateway team and a connector-policy team
+    use_case_id: {{USE_CASE}}         # register it in aurai-eval-governance
+    risk_tier: {{TIER}}
+    client_id: agent-{{NAME}}
+    client_secret_env: {{ENV}}_CLIENT_SECRET
+    gateway_key_env: {{ENV}}_GATEWAY_KEY
+    model: aurai-balanced
+    connectors:
+      tickets: http://connector-tickets.aurai-connectors.svc.cluster.local:8080/mcp
