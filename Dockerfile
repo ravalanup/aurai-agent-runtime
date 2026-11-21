@@ -1,12 +1,12 @@
 # Aurai agent runtime image. One image runs either service: `serve-runtime` or `serve-approvals`. It carries the example
 # config so `check` runs inside it; deployments mount their own config over /config.
-FROM python:3.12-slim AS build
+FROM python:3.15-slim AS build
 WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --no-cache-dir --prefix=/install .
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 COPY --from=build /install /usr/local
 WORKDIR /app
 COPY config ./config
