@@ -1,0 +1,17 @@
+{{- range $name, $service := dict "runtime" "agent-runtime" "approvals" "approvals" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $service }}
+  labels:
+    {{- include "aurai-agents.labels" $ | nindent 4 }}
+    aurai.io/component: {{ $name }}
+spec:
+  selector:
+    {{- include "aurai-agents.selector" (dict "root" $ "name" $name) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $.Values.service.port }}
+      targetPort: http
+{{- end }}

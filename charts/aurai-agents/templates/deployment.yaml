@@ -1,0 +1,70 @@
+{{- /* The runtime holds the agents' client secrets and gateway keys; the approval service does not. */ -}}
+{{- $components := dict "runtime" (dict "command" "serve-runtime" "replicas" .Values.runtime.replicas "service" "agent-runtime") "approvals" (dict "command" "serve-approvals" "replicas" .Values.approvals.replicas "service" "approvals") }}
+{{- range $name, $c := $components }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aurai-{{ $name }}
+  labels:
+    {{- include "aurai-agents.labels" $ | nindent 4 }}
+    aurai.io/component: {{ $name }}
+spec:
+  replicas: {{ $c.replicas }}
+  selector:
+    matchLabels:
+      {{- include "aurai-agents.selector" (dict "root" $ "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aurai-agents.selector" (dict "root" $ "name" $name) | nindent 8 }}
+      annotations:
+        # Roll the pods when the agent or approver config changes.
+        checksum/config: {{ print $.Values.files.agents $.Values.files.approvers | sha256sum }}
+    spec:
+      serviceAccountName: aurai-agents
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}
+          image: {{ include "aurai-agents.image" $ }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args: [{{ $c.command | quote }}, "--port", "8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            {{- include "aurai-agents.commonEnv" $ | nindent 12 }}
+            {{- if eq $name "runtime" }}
+            - name: AURAI_GATEWAY_URL
+              value: {{ $.Values.config.gatewayUrl | quote }}
+            {{- end }}
+          {{- if eq $name "runtime" }}
+          # Per-agent client secrets and gateway keys (the variable names agents.yaml lists).
+          envFrom:
+            - secretRef:
+                name: {{ $.Values.secrets.name }}
+          {{- end }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "aurai-agents.securityContext" $ | nindent 12 }}
+          volumeMounts:
+            - { name: config, mountPath: /config, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: config
+          configMap:
+            name: aurai-agents-config
+        - name: tmp
+          emptyDir: {}
+{{- end }}

@@ -1,0 +1,16 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- range $name := list "runtime" "approvals" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: aurai-{{ $name }}
+  labels:
+    {{- include "aurai-agents.labels" $ | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "aurai-agents.selector" (dict "root" $ "name" $name) | nindent 6 }}
+{{- end }}
+{{- end }}

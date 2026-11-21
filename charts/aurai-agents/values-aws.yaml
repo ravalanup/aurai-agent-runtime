@@ -1,0 +1,18 @@
+global:
+  environment: aws
+
+image:
+  repository: ""                   # set to the ECR repository at install time
+  pullPolicy: Always
+
+runtime:
+  replicas: 2
+approvals:
+  replicas: 2
+
+podDisruptionBudget:
+  enabled: true
+
+resources:
+  requests: { cpu: 200m, memory: 256Mi }
+  limits: { memory: 512Mi }

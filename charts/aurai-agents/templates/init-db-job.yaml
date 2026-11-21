@@ -1,0 +1,36 @@
+# Creates the tables (LangGraph checkpoints and approvals) before the pods roll, so replicas never race to do it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aurai-agents-init-db
+  labels:
+    {{- include "aurai-agents.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aurai-agents-init-db
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: init-db
+          image: {{ include "aurai-agents.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["init-db"]
+          env:
+            - name: AURAI_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.name }}
+                  key: {{ .Values.secrets.databaseUrl }}
+          securityContext:
+            {{- include "aurai-agents.securityContext" . | nindent 12 }}

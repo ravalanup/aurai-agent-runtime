@@ -1,0 +1,55 @@
+global:
+  environment: local
+
+image:
+  repository: aurai-agent-runtime
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+runtime:
+  replicas: 1
+approvals:
+  replicas: 1
+
+service:
+  port: 8080
+
+config:
+  oidcIssuer: http://keycloak.aurai-system.svc.cluster.local:8080/realms/aurai
+  oidcJwksUrl: ""                  # blank = derived from the issuer
+  tokenUrl: ""                     # blank = derived from the issuer
+  agentsAudience: aurai-agents     # people and workflow tools call the runtime with this audience
+  approvalsAudience: aurai-approvals
+  gatewayUrl: http://litellm.aurai-gateway.svc.cluster.local:4000
+  otlpEndpoint: http://otel-collector.aurai-system.svc.cluster.local:4318
+
+# The agents and the approver groups. Supply both at install time so the files in config/ stay the source of truth:
+#   --set-file files.agents=config/agents.yaml --set-file files.approvers=config/approvers.yaml
+files:
+  agents: ""
+  approvers: ""
+
+# Both Secrets are created outside the chart.
+#   agents-secrets  : AURAI_APPROVAL_SIGNING_KEY, AURAI_DATABASE_URL, plus each agent's client secret and gateway key
+#                     (the variable names in agents.yaml). Only the runtime reads the agent entries.
+#   approvals use the same Secret but only the two keys named below.
+secrets:
+  name: agents-secrets
+  approvalSigningKey: AURAI_APPROVAL_SIGNING_KEY
+  databaseUrl: AURAI_DATABASE_URL
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+resources:
+  requests: { cpu: 100m, memory: 192Mi }
+  limits: { memory: 384Mi }
+
+podDisruptionBudget:
+  enabled: false                   # turn on with replicas > 1
+
+networkPolicy:
+  enabled: true
+  # Namespaces labelled aurai.io/platform-access=true may call both services; add others here by name.
+  allowFromNamespaces: []

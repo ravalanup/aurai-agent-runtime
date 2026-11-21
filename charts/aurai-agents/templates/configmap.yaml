@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aurai-agents-config
+  labels:
+    {{- include "aurai-agents.labels" . | nindent 4 }}
+data:
+  agents.yaml: |
+    {{- required "supply --set-file files.agents=config/agents.yaml" .Values.files.agents | nindent 4 }}
+  approvers.yaml: |
+    {{- required "supply --set-file files.approvers=config/approvers.yaml" .Values.files.approvers | nindent 4 }}
